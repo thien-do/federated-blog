@@ -22,7 +22,11 @@ export const EntryAuthor = ({ author }) => {
         <Image alt={name} src={avatar} width={48} height={48} />
       </div>
       <div className="info">
-        <b>{name}</b>
+        <Link href={`/?author=${hostName}`} passHref>
+          <a>
+            <b>{name}</b>
+          </a>
+        </Link>
         <div>
           <Link href={blogUrl}>
             <a>{hostName}</a>
@@ -33,12 +37,12 @@ export const EntryAuthor = ({ author }) => {
   );
 };
 
-export const Entry = ({ doc }) => {
+export const Entry = ({ doc, showAuthor = true }) => {
   const encodedUrl = encodePostUrl(doc.link, doc.authorIdx);
   return (
     <RoundedPanel>
-      <EntryAuthor author={doc.author} />
-      <h3 className="entry-title">
+      {showAuthor ? <EntryAuthor author={doc.author} /> : null}
+      <h3 className="entry-title mt-0">
         <a href={`/read/${encodedUrl}`}>{doc.title}</a>
       </h3>
       <p>Đăng ngày {formatDate(doc.pubDate)}</p>

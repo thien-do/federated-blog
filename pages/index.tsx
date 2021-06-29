@@ -1,18 +1,20 @@
 import React from 'react';
 import { NextPageContext } from 'next';
 import Parser from 'rss-parser';
-import { Button } from '@moai/core';
+import qs from 'qs';
+import { Button, DivPx } from '@moai/core';
 import NodeCache from 'node-cache';
 import {
   HiOutlineChevronLeft as PrevIcon,
   HiOutlineChevronRight as NextIcon
 } from 'react-icons/hi';
 import Link from 'next/link';
-import { Entry } from '@/components/Entry';
+import { Entry, EntryAuthor } from '@/components/Entry';
 import Layout from '@/components/Layout';
 import { RoundedPanel } from '@/components/RoundedPane';
 import styles from '@/styles/Home.module.css';
 import channelsData from '@/channels.json';
+import { getHostName } from '@/utils/url';
 
 const CACHE_DURATION = 60 * 15; // 15 minutes cache
 const cache = new NodeCache({ stdTTL: CACHE_DURATION });
@@ -23,14 +25,21 @@ type RSSItems = ({
 } & Parser.Item)[];
 
 export const getServerSideProps = async (context: NextPageContext) => {
-  const { page = '1' } = context.query;
+  const { page = '1', author = null } = context.query;
   const pageNumber = parseInt(page as string, 10);
   const parser = new Parser();
-  let docs: RSSItems = cache.get('docs');
+  const cacheKey = (author as string) || 'all_docs';
+  let docs: RSSItems = cache.get(cacheKey);
   if (!docs) {
+    const channels =
+      cacheKey === 'all_docs'
+        ? channelsData.channels
+        : channelsData.channels.filter(
+            (channel) => getHostName(channel.url) === author
+          );
     docs = (
       await Promise.all(
-        channelsData.channels.map(async (channel, channelIndex) => {
+        channels.map(async (channel, channelIndex) => {
           const result = await parser.parseURL(channel.url);
           return (
             result?.items.map((item) => ({
@@ -47,10 +56,11 @@ export const getServerSideProps = async (context: NextPageContext) => {
       let db = new Date(a.pubDate);
       return +da - +db;
     });
-    cache.set('docs', docs);
+    cache.set(cacheKey, docs);
   }
   return {
     props: {
+      author: author,
       docs: docs.slice((pageNumber - 1) * PAGE_SIZE, pageNumber * PAGE_SIZE),
       page: pageNumber,
       totalPages: Math.ceil(docs.length / PAGE_SIZE)
@@ -58,16 +68,34 @@ export const getServerSideProps = async (context: NextPageContext) => {
   };
 };
 
-const Home = ({ docs, page, totalPages }) => {
+const Home = ({ docs, page, totalPages, author }) => {
+  const nextPage = qs.stringify(
+    { page: page + 1, author },
+    { skipNulls: true }
+  );
+  const prevPage = qs.stringify(
+    { page: page - 1, author },
+    { skipNulls: true }
+  );
+  const currentAuthor = author && docs.length && docs[0].author;
   return (
     <Layout>
+      {author && (
+        <RoundedPanel>
+          <Link href="/" passHref>
+            <Button icon={PrevIcon}>Xem toàn bộ tác giả</Button>
+          </Link>
+          <DivPx size={32} />
+          <EntryAuthor author={currentAuthor} />
+        </RoundedPanel>
+      )}
       {docs.map((doc) => (
-        <Entry doc={doc} key={doc.link} />
+        <Entry doc={doc} key={doc.link} showAuthor={author === null} />
       ))}
       <RoundedPanel transparent={true}>
         <div className={styles.paginationSection}>
           {page > 1 ? (
-            <Link href={`/?page=${page - 1}`} passHref>
+            <Link href={`?${prevPage}`} passHref>
               <Button icon={PrevIcon}>Trang trước</Button>
             </Link>
           ) : (
@@ -79,7 +107,7 @@ const Home = ({ docs, page, totalPages }) => {
             </div>
           )}
           {page < totalPages ? (
-            <Link href={`/?page=${page + 1}`} passHref>
+            <Link href={`?${nextPage}`} passHref>
               <Button icon={NextIcon} iconRight>
                 Trang sau
               </Button>
